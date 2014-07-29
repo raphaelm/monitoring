@@ -9,7 +9,9 @@ arrived and delete them, while sending out the next pair of mails.
 import argparse
 import socket
 import time
+import email
 from smtplib import SMTP
+from imaplib import IMAP4
 
 import nagiosplugin
 
@@ -26,18 +28,17 @@ class Twowaymail(nagiosplugin.Resource):
         except IndexError:
             port = 587
         with SMTP(host, port) as smtp:
-            print(smtp)
             if conn[5]:
                 smtp.starttls()
                 smtp.ehlo()
             smtp.login(conn[3], conn[4])
             smtp.sendmail(conn[2], to, """From: {fromaddr}
 To: {toaddr}
-Subject: Monitoring probe
+Subject: Monitoring probe from {monitorhost}
+X-TWM-Monitoring-Host: {monitorhost}
+X-TWM-Sender-Host: {fromhost}
+X-TWM-Unixtime: {unixtime}
 
-Monitoring host: {monitorhost}
-Sender host: {fromhost}
-Unixtime: {unixtime}
 KTHXBYE
                 """.format(
                     fromaddr=conn[2],
@@ -48,11 +49,46 @@ KTHXBYE
                 )
             )
 
+    def checkrecv(self, conn, senderhost):
+        host = conn[1].split(":")[0]
+        try:
+            port = conn[1].split(":")[1]
+        except IndexError:
+            port = 143
+        imap = IMAP4(host, port)
+        if conn[5]:
+            imap.starttls()
+        imap.login(conn[3], conn[4])
+        imap.select()
+        typ, data = imap.search(None, 'ALL')
+        found = False
+        for num in data[0].split():
+            typ, data = imap.fetch(num, '(RFC822)')
+            msg = email.message_from_string(data[0][1].decode("utf-8"))
+            if not 'x-twm-sender-host' in msg or msg['x-twm-sender-host'] != senderhost:
+                continue
+            if not 'x-twm-unixtime' in msg or time.time() - float(msg['x-twm-unixtime'].strip()) > 1800:
+                imap.store(num, '+FLAGS', '\\Deleted')
+                continue
+            found = True
+            print("Mail found!")
+            imap.store(num, '+FLAGS', '\\Deleted')
+        imap.expunge()
+
+        imap.shutdown()
+        return found
+
     def probe(self):
+        # Check for last mails
+        recv1 = self.checkrecv(self.conn1, self.conn2[0])
+        recv2 = self.checkrecv(self.conn2, self.conn1[1])
         # Send out mail probes
         self.send(self.conn1, self.conn2[2])
         self.send(self.conn2, self.conn1[2])
-        return [nagiosplugin.Metric('mail', True, context='null')]
+        return [
+            nagiosplugin.Metric('recv1', recv1, context='null'),
+            nagiosplugin.Metric('recv2', recv2, context='null')
+        ]
 
 
 def main():
@@ -87,6 +123,8 @@ def main():
             (args.smtp1, args.imap1, args.addr1, args.user1, args.pass1, not args.nossl1),
             (args.smtp2, args.imap2, args.addr2, args.user2, args.pass2, not args.nossl2)
         ),
+        nagiosplugin.Context('recv1'),
+        nagiosplugin.Context('recv2'),
     )
     check.main()
 
