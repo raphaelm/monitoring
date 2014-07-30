@@ -88,12 +88,12 @@ class Twowaymail(nagiosplugin.Resource):
             port = conn[0].split(":")[1]
         except IndexError:
             port = 587
-        with SMTP(host, port) as smtp:
-            if conn[5]:
-                smtp.starttls()
-                smtp.ehlo()
-            smtp.login(conn[3], conn[4])
-            smtp.sendmail(conn[2], to, """From: {fromaddr}
+        smtp = SMTP(host, port)
+        if conn[5]:
+            smtp.starttls()
+            smtp.ehlo()
+        smtp.login(conn[3], conn[4])
+        smtp.sendmail(conn[2], to, """From: {fromaddr}
 To: {toaddr}
 Subject: Monitoring probe from {monitorhost}
 X-TWM-Monitoring-Host: {monitorhost}
@@ -101,14 +101,15 @@ X-TWM-Sender-Host: {fromhost}
 X-TWM-Unixtime: {unixtime}
 
 KTHXBYE
-                """.format(
-                    fromaddr=conn[2],
-                    toaddr=to,
-                    monitorhost=socket.gethostname(),
-                    fromhost=conn[0],
-                    unixtime=time.time()
-                )
+            """.format(
+                fromaddr=conn[2],
+                toaddr=to,
+                monitorhost=socket.gethostname(),
+                fromhost=conn[0],
+                unixtime=time.time()
             )
+        )
+        smtp.quit()
 
     def checkrecv(self, conn, senderhost):
         """
