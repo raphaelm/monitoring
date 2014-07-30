@@ -159,7 +159,7 @@ KTHXBYE
             _log.error('Error fetching mail from host 1')
             _log.error(str(e))
         try:
-            recv2 = self.checkrecv(self.conn2, self.conn1[1])
+            recv2 = self.checkrecv(self.conn2, self.conn1[0])
         except Exception as e:
             _log.error('Error fetching mail from host 2')
             _log.error(str(e))
