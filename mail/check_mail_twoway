@@ -7,6 +7,9 @@ sends mails to the other host. On the next run, it will login into both
 hosts via IMAP, checks whether the mails arrived and delete them, while
 sending out the next pair of mails.
 
+This will of course cause a CRITICAL on first run! There is currently no
+mechanism implemented to prevent this.
+
 
 (c) 2014 Raphael Michel <michel@rami.io>
 Published under MIT license
